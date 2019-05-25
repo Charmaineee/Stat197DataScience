@@ -1,0 +1,173 @@
+---
+title: "R Markdown for Course_Project_4"
+author: "Charmaine Largo"
+date: "May 25, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##R Markdown 
+### Course Project 4
+
+Here are the questions that need to be adressed for this project.
+
+1. Have total emissions from PM2.5 decreased in the United States from 1999 to 2008? Using the base
+plotting system, make a plot showing the total PM2.5 emission from all sources for each of the years
+1999, 2002, 2005, and 2008.
+
+2. Have total emissions from PM2.5 decreased in the Baltimore City, Maryland (fips == "24510")
+from 1999 to 2008? Use the base plotting system to make a plot answering this question.
+
+3. Of the four types of sources indicated by the type (point, nonpoint, onroad, nonroad) variable,
+which of these four sources have seen decreases in emissions from 1999-2008 for Baltimore City?
+Which have seen increases in emissions from 1999-2008?
+
+4. Across the United States, how have emissions from coal combustion-related sources changed from
+1999-2008?
+
+5. How have emissions from motor vehicle sources changed from 1999-2008 in Baltimore City?
+
+6. Compare emissions from motor vehicle sources in Baltimore City with emissions from motor vehicle
+sources in Los Angeles County, California (fips == "06037"). Which city has seen greater
+changes over time in motor vehicle emissions?
+
+
+First, we need to load these the data sets.
+```{r NEI}
+NEI <- readRDS("summarySCC_PM25.rds")
+```
+```{r SCC}
+SCC <- readRDS("Source_Classification_Code.rds")
+```
+## Question 1
+
+First aggregate the Total PM2.5 emission for all the sources.
+```{r total}
+total <- aggregate(Emissions ~ year,NEI, sum)
+```
+
+
+```{r barplot}
+barplot(
+  (total$Emissions)/10^6,
+  names.arg=total$year,
+  xlab="Year",
+  ylab="PM2.5 Emissions",
+  main="Total PM2.5 Emissions From All US Sources"
+)
+```
+
+The plot shows that there was a decrease in the US total emissions from 1999 to 2008.
+
+
+## Question 2
+Here, we need to aggregate the Total PM2.5 emission only for Baltimore City.
+```{r baltimore}
+baltimore <- NEI[NEI$fips=="24510",]
+```
+
+```{r totalBaltimore}
+totalBaltimore <- aggregate(Emissions ~ year, baltimore,sum)
+```
+
+```{r barplot2}
+barplot(
+  totalBaltimore$Emissions,
+  names.arg=totalBaltimore$year,
+  xlab="Year",
+  ylab="PM2.5 Emissions (Tons)",
+  main="Total PM2.5 Emissions From All Baltimore City Sources"
+)
+```
+
+There was a decrease in overall total emissions for Baltimore City from 1999 to 2008.
+
+## Question 3
+
+Call ggplot2 package.
+```{r ggplot2}
+library(ggplot2)
+ggp <- ggplot(baltimore,aes(factor(year),Emissions,fill=type)) +
+  geom_bar(stat="identity") +
+  theme_bw() + guides(fill=FALSE)+
+  facet_grid(.~type,scales = "free",space="free") + 
+  labs(x="year", y=expression("Total PM"[2.5]*" Emission (Tons)")) + 
+  labs(title=expression("PM"[2.5]*" Emissions, Baltimore City 1999-2008 by Source Type"))
+```
+
+Print the plot.
+```{r print}
+print(ggp)
+```
+Based on the plot non-road, nonpoint, on-road source types have all seen decreased emissions overall in Baltimore City from 1999-2008.
+
+## Question 4
+
+Subset the source factors of coal combustion using NEI data.
+```{r combustionRelated}
+combustionRelated <- grepl("comb", SCC$SCC.Level.One, ignore.case=TRUE)
+coalRelated <- grepl("coal", SCC$SCC.Level.Four, ignore.case=TRUE) 
+coalCombustion <- (combustionRelated & coalRelated)
+combustionSCC <- SCC[coalCombustion,]$SCC
+combustionNEI <- NEI[NEI$SCC %in% combustionSCC,]
+```
+
+```{r ggp2}
+ggp <- ggplot(combustionNEI,aes(factor(year),Emissions/10^5)) +
+  geom_bar(stat="identity",fill="grey",width=0.75) +
+  theme_bw() +  guides(fill=FALSE) +
+  labs(x="year", y=expression("Total PM"[2.5]*" Emission (10^5 Tons)")) + 
+  labs(title=expression("PM"[2.5]*" Coal Combustion Source Emissions Across US from 1999-2008"))
+
+print(ggp)
+
+```
+
+Emissions from coal combustion related sources have decreased from 6 * 10^6 to below 4 * 10^6 from 1999-2008.
+
+## Question 5
+Subset the motor vehicles.
+```{r vehicles}
+vehicles <- grepl("vehicle", SCC$SCC.Level.Two, ignore.case=TRUE)
+vehiclesSCC <- SCC[vehicles,]$SCC
+vehiclesNEI <- NEI[NEI$SCC %in% vehiclesSCC,]
+baltimoreVehicles <- vehiclesNEI[vehiclesNEI$fips==24510,]
+```
+
+Print the plot.
+```{r ggp3}
+ggp <- ggplot(baltimoreVehicles,aes(factor(year),Emissions)) +
+  geom_bar(stat="identity",fill="grey",width=0.75) +
+  theme_bw() +  guides(fill=FALSE) +
+  labs(x="year", y=expression("Total PM"[2.5]*" Emission (10^5 Tons)")) + 
+  labs(title=expression("PM"[2.5]*" Motor Vehicle Source Emissions in Baltimore from 1999-2008"))
+
+print(ggp)
+```
+
+In Baltimore City, the emissions from motor vehicle has decreased from 1999-2008.
+
+## Question 6
+```{r vehiclesBaltimore}
+vehiclesBaltimore <- vehiclesNEI[vehiclesNEI$fips == 24510,]
+vehiclesBaltimore$city <- "Baltimore City"
+vehiclesLANEI <- vehiclesNEI[vehiclesNEI$fips=="06037",]
+vehiclesLANEI$city <- "Los Angeles County"
+bothNEI <- rbind(vehiclesBaltimore,vehiclesLANEI)
+```
+
+```{r ggp4}
+ggp <- ggplot(bothNEI, aes(x=factor(year), y=Emissions, fill=city)) +
+  geom_bar(aes(fill=year),stat="identity") +
+  facet_grid(scales="free", space="free", .~city) +
+  guides(fill=FALSE) + theme_bw() +
+  labs(x="year", y=expression("Total PM"[2.5]*" Emission (Kilo-Tons)")) + 
+  labs(title=expression("PM"[2.5]*" Motor Vehicle Source Emissions in Baltimore & LA, 1999-2008"))
+
+print(ggp)
+```
+
+It was shown in the plot that Los Angeles had a great change in motor vehicle emissions.
